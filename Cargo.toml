@@ -1,16 +1,46 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.dependencies]
+kolibri-embedded-gui = { git = "https://github.com/Yandrik/kolibri.git", branch = "widgets_color_param" }
+rmk = { version = "0.7.8", features = ["controller"] }
+defmt = "1.0"
+embedded-graphics = "0.8"
+memory-lcd-spi = { git = "https://github.com/HaoboGu/memory-lcd-spi.git", branch = "feat/add_const_buf_size" }
+embedded-hal = "1.0.0"
+embedded-iconoir = "0.2.3"
+paste = "1.0.15"
+static_assertions = "1.1.0"
+itoa = "1.0.15"
+
+resvg = "0.45"
+quote = "1.0"
+proc-macro2 = "1.0"
+syn = "2.0"
+darling = "0.21.0"
+image = "0.25.6"
+
+bongo-cat.path = "crates/bongo-cat"
+
 [package]
 name = "rmk-display"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-kolibri-embedded-gui = "=0.1.0"
-rmk = { version = "0.7.8", features = ["controller"] }
-defmt = { version = "1.0", optional = true }
-embedded-graphics = "0.8"
-memory-lcd-spi = { git = "https://github.com/HaoboGu/memory-lcd-spi.git", branch = "feat/add_const_buf_size", optional = true }
-embedded-hal = "1.0.0"
-itoa = "1.0.15"
+kolibri-embedded-gui.workspace = true
+rmk = { workspace = true, features = ["controller"] }
+defmt = { workspace = true, optional = true }
+embedded-graphics.workspace = true
+memory-lcd-spi = { workspace = true, optional = true }
+embedded-hal.workspace = true
+embedded-iconoir.workspace = true
+paste.workspace = true
+static_assertions.workspace = true
+itoa.workspace = true
+
+bongo-cat.workspace = true
 
 [features]
 default = ["defmt"]

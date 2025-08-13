@@ -1,13 +1,19 @@
-use memory_lcd_spi::{MemoryLCD, framebuffer::{Sharp, FramebufferBW}, DisplaySpec};
-use embedded_hal::{spi::SpiBus, digital::OutputPin};
-use crate::{DisplayController, DisplayUpdater, DisplayStyleProvider};
+use crate::{DisplayController, DisplayProvider};
+use embedded_hal::{digital::OutputPin, spi::SpiBus};
+use memory_lcd_spi::{
+    DisplaySpec, MemoryLCD,
+    framebuffer::{FramebufferBW, Sharp, Rotation},
+};
 
-use embedded_graphics::{pixelcolor::BinaryColor};
-use embedded_graphics::{draw_target::DrawTarget, geometry::{OriginDimensions, Size}};
 use embedded_graphics::Pixel;
 use embedded_graphics::mono_font;
-use kolibri_embedded_gui::style::Style;
+use embedded_graphics::pixelcolor::BinaryColor;
+use embedded_graphics::{
+    draw_target::DrawTarget,
+    geometry::{OriginDimensions, Size},
+};
 use kolibri_embedded_gui::style::Spacing;
+use kolibri_embedded_gui::style::Style;
 
 pub(crate) const DISPLAY_STYLE: Style<BinaryColor> = Style {
     background_color: BinaryColor::Off,
@@ -31,39 +37,95 @@ pub(crate) const DISPLAY_STYLE: Style<BinaryColor> = Style {
     item_background_color: BinaryColor::Off,
 };
 
+#[bongo_cat::bongo_cat(binary, width = 60, height = 60, both)]
+mod bongo_cat_impl {
+    use kolibri_embedded_gui::smartstate::{Container, Smartstate};
+    use kolibri_embedded_gui::ui::{GuiResult, Response, Ui, Widget};
+    use embedded_graphics::pixelcolor::BinaryColor;
+    use embedded_graphics::draw_target::DrawTarget;
+    use embedded_graphics::geometry::{Size, Point};
+    use embedded_graphics::image::{Image, ImageRaw};
+    use embedded_graphics::transform::Transform;
+    use crate::AnimationWidget;
+    pub struct BongoCat<'a> {
+        up: u8,
+        smartstate: Container<'a, Smartstate>,
+    }
+    impl<'a> BongoCat<'a> {
+        pub fn smartstate(mut self, smartstate: &'a mut Smartstate) -> Self {
+            self.smartstate.set(smartstate);
+            self
+        }
+    }
+    impl Widget<BinaryColor> for BongoCat<'_> {
+        fn draw<DRAW: DrawTarget<Color = BinaryColor>>(
+            &mut self,
+            ui: &mut Ui<DRAW, BinaryColor>,
+        ) -> GuiResult<Response> {
+            let iresponse = ui.allocate_space(Size::new(WIDTH, HEIGHT))?;
+            let redraw = !self.smartstate.eq_option(&Some(Smartstate::state(self.up.into())));
+            self.smartstate
+                .modify(|st| *st = Smartstate::state(self.up.into()));
+            if redraw {
+                ui.start_drawing(&iresponse.area);
+                let raw_image = if self.up % 2 != 0 {
+                    ImageRaw::<BinaryColor>::new(BOTH_UP, WIDTH)
+                } else {
+                    ImageRaw::<BinaryColor>::new(DEFAULT, WIDTH)
+                };
+                let mut image = Image::new(&raw_image, Point::zero());
+                image.translate_mut(iresponse.area.top_left);
+                ui.draw(&image)?;
+                ui.finalize()?;
+            }
+            Ok(Response::new(iresponse))
+        }
+    }
+    impl AnimationWidget<BinaryColor> for BongoCat<'_> {
+        fn new() -> Self {
+            Self {
+                smartstate: Container::empty(),
+                up: 0,
+            }
+        }
+        fn set(mut self, state: u8) -> Self {
+            self.up = state % 2;
+            self
+        }
+    }
+}
+
 pub struct NiceView;
 impl DisplaySpec for NiceView {
     const WIDTH: u16 = 160;
     const HEIGHT: u16 = 68;
     const SIZE: usize = Self::WIDTH as usize * Self::HEIGHT as usize / 2;
 
-    type Framebuffer = FramebufferBW<{ Self::WIDTH }, { Self::HEIGHT }, {Self::SIZE}, Sharp>;
+    type Framebuffer = FramebufferBW<{ Self::WIDTH }, { Self::HEIGHT }, { Self::SIZE }, Sharp>;
 }
 
-pub fn create_controller<SPI: SpiBus<u8>, CS: OutputPin, const PERIPHERAL_COUNT: usize>(spi_bus: SPI, cs: CS) -> DisplayController<BinaryColor, Wrapper<SPI, CS>, PERIPHERAL_COUNT>{
-    let lcd = MemoryLCD::<NiceView, SPI, CS>::new(spi_bus, cs);
-    let wrapper = Wrapper{lcd};
+pub fn create_controller<'a, SPI: SpiBus<u8>, CS: OutputPin, const PERIPHERAL_COUNT: usize>(
+    spi_bus: SPI,
+    cs: CS,
+) -> DisplayController<'a, BinaryColor, Wrapper<SPI, CS>, PERIPHERAL_COUNT> {
+    let mut lcd = MemoryLCD::<NiceView, SPI, CS>::new(spi_bus, cs);
+    lcd.set_rotation(Rotation::Deg270);
+    let wrapper = Wrapper { lcd };
     let controller = DisplayController::new(wrapper);
     controller
 }
 
-pub struct Wrapper <SPI: SpiBus<u8>, CS: OutputPin>{
-    lcd:  MemoryLCD<NiceView, SPI, CS>,
+pub struct Wrapper<SPI: SpiBus<u8>, CS: OutputPin> {
+    lcd: MemoryLCD<NiceView, SPI, CS>,
 }
 
-impl <SPI: SpiBus<u8>, CS: OutputPin> DisplayUpdater for Wrapper<SPI, CS> {
-    fn update(&mut self) {
-        self.lcd.update().unwrap();
-    }
-}
-
-impl <SPI: SpiBus<u8>, CS: OutputPin> OriginDimensions for Wrapper<SPI, CS> {
+impl<SPI: SpiBus<u8>, CS: OutputPin> OriginDimensions for Wrapper<SPI, CS> {
     fn size(&self) -> Size {
         self.lcd.size()
     }
 }
 
-impl <SPI: SpiBus<u8>, CS: OutputPin> DrawTarget for Wrapper<SPI, CS> {
+impl<SPI: SpiBus<u8>, CS: OutputPin> DrawTarget for Wrapper<SPI, CS> {
     type Color = BinaryColor;
     type Error = core::convert::Infallible;
 
@@ -78,10 +140,14 @@ impl <SPI: SpiBus<u8>, CS: OutputPin> DrawTarget for Wrapper<SPI, CS> {
     }
 }
 
-impl <SPI: SpiBus<u8>, CS: OutputPin> DisplayStyleProvider for Wrapper<SPI, CS> {
+impl<'a, SPI: SpiBus<u8>, CS: OutputPin> DisplayProvider<'a> for Wrapper<SPI, CS> {
     type Color = BinaryColor;
+    type Animation = bongo_cat_impl::BongoCat<'a>;
 
     fn style(&self) -> Style<Self::Color> {
         DISPLAY_STYLE
+    }
+    fn update(&mut self) {
+        self.lcd.update().unwrap();
     }
 }
