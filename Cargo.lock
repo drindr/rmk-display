@@ -2359,6 +2359,7 @@ version = "0.1.0"
 dependencies = [
  "bongo-cat",
  "defmt 1.0.1",
+ "embassy-time",
  "embedded-graphics",
  "embedded-hal 1.0.0",
  "embedded-iconoir",

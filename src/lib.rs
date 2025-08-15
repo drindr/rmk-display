@@ -3,6 +3,7 @@
 pub(crate) mod fmt;
 mod info;
 pub mod spec;
+use embassy_time::Instant;
 use embedded_graphics::prelude::PixelColor;
 use info::DispInfo;
 
@@ -45,6 +46,7 @@ where
     sub: ControllerSub,
     disp: DisplayImpl,
     info: DispInfo<PERIPHERAL_COUNT>,
+    last_update: Instant,
     _phantom: core::marker::PhantomData<&'a Color>,
 }
 impl<'a, Color, DisplayImpl, const PERIPHERAL_COUNT: usize>
@@ -58,6 +60,7 @@ where
             sub: unwrap!(CONTROLLER_CHANNEL.subscriber()),
             disp: disp,
             info: DispInfo::default(),
+            last_update: Instant::MIN,
             _phantom: core::marker::PhantomData,
         }
     }
@@ -72,7 +75,10 @@ where
     type Event = ControllerEvent;
     async fn process_event(&mut self, event: Self::Event) {
         self.info.update_info(&event);
-        self.redraw();
+        if self.last_update.elapsed().as_millis() > 10 {
+            self.draw();
+            self.last_update = Instant::now();
+        }
     }
     async fn next_message(&mut self) -> Self::Event {
         self.sub.next_message_pure().await
@@ -85,14 +91,13 @@ where
     Color: PixelColor,
     DisplayImpl: DisplayDriver<'a, Color>,
 {
-    fn redraw(&mut self) {
+    fn draw(&mut self) {
         use kolibri_embedded_gui::label::Label;
         use kolibri_embedded_gui::ui::Ui;
         let style = self.disp.style();
         let mut ui = Ui::new_fullscreen(&mut self.disp, style);
         ui.clear_background().unwrap();
 
-        ui.add(Label::new("Hello, "));
         ui.add(Label::new("RMK!"));
 
         let mut buffer = itoa::Buffer::new();
