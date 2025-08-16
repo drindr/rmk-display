@@ -100,8 +100,8 @@ mod bongo_cat_impl {
     }
 }
 
-pub struct NiceView;
-impl DisplaySpec for NiceView {
+pub struct NiceViewDisplaySpec;
+impl DisplaySpec for NiceViewDisplaySpec {
     const WIDTH: u16 = 160;
     const HEIGHT: u16 = 68;
     const SIZE: usize = Self::WIDTH as usize * Self::HEIGHT as usize / 2;
@@ -109,33 +109,40 @@ impl DisplaySpec for NiceView {
     type Framebuffer = FramebufferBW<{ Self::WIDTH }, { Self::HEIGHT }, { Self::SIZE }, Sharp>;
 }
 
-pub fn new_controller<SPI, CS, Animation, const PERIPHERAL_COUNT: usize>(
-    spi_bus: SPI,
-    cs: CS,
-) -> DisplayController<BinaryColor, Wrapper<SPI, CS>, Animation, PERIPHERAL_COUNT>
-where
-    SPI: SpiBus<u8>,
-    CS: OutputPin,
-    Animation: AnimationWidget<BinaryColor>,
-{
-    let mut lcd = MemoryLCD::<NiceView, SPI, CS>::new(spi_bus, cs);
-    lcd.set_rotation(Rotation::Deg270);
-    let wrapper = Wrapper { lcd };
-    let controller = DisplayController::new(wrapper);
-    controller
+pub struct NiceView<SPI: SpiBus<u8>, CS: OutputPin> {
+    lcd: MemoryLCD<NiceViewDisplaySpec, SPI, CS>,
 }
 
-pub struct Wrapper<SPI: SpiBus<u8>, CS: OutputPin> {
-    lcd: MemoryLCD<NiceView, SPI, CS>,
+impl<SPI: SpiBus<u8>, CS: OutputPin> NiceView<SPI, CS> {
+    pub fn new(lcd: MemoryLCD<NiceViewDisplaySpec, SPI, CS>) -> Self {
+        Self { lcd }
+    }
+
+    pub fn new_controller<Animation, const PERIPHERAL_COUNT: usize>(
+        spi_bus: SPI,
+        cs: CS,
+    ) -> DisplayController<BinaryColor, NiceView<SPI, CS>, Animation, PERIPHERAL_COUNT>
+    where
+        SPI: SpiBus<u8>,
+        CS: OutputPin,
+        Animation: AnimationWidget<BinaryColor>,
+    {
+        let mut lcd = MemoryLCD::<NiceViewDisplaySpec, SPI, CS>::new(spi_bus, cs);
+        lcd.set_rotation(Rotation::Deg270);
+        let niceview = NiceView::new(lcd);
+        let controller = DisplayController::new(niceview);
+        controller
+    }
+
 }
 
-impl<SPI: SpiBus<u8>, CS: OutputPin> OriginDimensions for Wrapper<SPI, CS> {
+impl<SPI: SpiBus<u8>, CS: OutputPin> OriginDimensions for NiceView<SPI, CS> {
     fn size(&self) -> Size {
         self.lcd.size()
     }
 }
 
-impl<SPI: SpiBus<u8>, CS: OutputPin> DrawTarget for Wrapper<SPI, CS> {
+impl<SPI: SpiBus<u8>, CS: OutputPin> DrawTarget for NiceView<SPI, CS> {
     type Color = BinaryColor;
     type Error = core::convert::Infallible;
 
@@ -150,7 +157,7 @@ impl<SPI: SpiBus<u8>, CS: OutputPin> DrawTarget for Wrapper<SPI, CS> {
     }
 }
 
-impl<SPI: SpiBus<u8>, CS: OutputPin> DisplayProvider for Wrapper<SPI, CS> {
+impl<SPI: SpiBus<u8>, CS: OutputPin> DisplayProvider for NiceView<SPI, CS> {
     type Color = BinaryColor;
 
     fn style(&self) -> Style<Self::Color> {
