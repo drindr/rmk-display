@@ -1,5 +1,6 @@
-use crate::{DisplayController, DisplayProvider};
 use crate::AnimationWidget;
+use crate::info::InfoProvider;
+use crate::{DisplayController, DisplayDriver};
 use embedded_hal::{digital::OutputPin, spi::SpiBus};
 use memory_lcd_spi::{
     DisplaySpec, MemoryLCD,
@@ -109,24 +110,31 @@ impl DisplaySpec for NiceViewDisplaySpec {
     type Framebuffer = FramebufferBW<{ Self::WIDTH }, { Self::HEIGHT }, { Self::SIZE }, Sharp>;
 }
 
-pub struct NiceView<SPI: SpiBus<u8>, CS: OutputPin> {
+pub struct NiceView<SPI, CS, Animation>
+where
+    SPI: SpiBus<u8>,
+    CS: OutputPin,
+    Animation: AnimationWidget<BinaryColor>,
+{
     lcd: MemoryLCD<NiceViewDisplaySpec, SPI, CS>,
+    increment: u8,
+    _phantom: core::marker::PhantomData<Animation>,
 }
 
-impl<SPI: SpiBus<u8>, CS: OutputPin> NiceView<SPI, CS> {
+impl<SPI, CS, Animation> NiceView<SPI, CS, Animation>
+where
+    SPI: SpiBus<u8>,
+    CS: OutputPin,
+    Animation: AnimationWidget<BinaryColor>,
+{
     pub fn new(lcd: MemoryLCD<NiceViewDisplaySpec, SPI, CS>) -> Self {
-        Self { lcd }
+        Self { lcd, increment: 0, _phantom: core::marker::PhantomData }
     }
 
-    pub fn new_controller<Animation, const PERIPHERAL_COUNT: usize>(
+    pub fn new_controller<const PERIPHERAL_COUNT: usize>(
         spi_bus: SPI,
         cs: CS,
-    ) -> DisplayController<BinaryColor, NiceView<SPI, CS>, Animation, PERIPHERAL_COUNT>
-    where
-        SPI: SpiBus<u8>,
-        CS: OutputPin,
-        Animation: AnimationWidget<BinaryColor>,
-    {
+    ) -> DisplayController<Self, PERIPHERAL_COUNT> {
         let mut lcd = MemoryLCD::<NiceViewDisplaySpec, SPI, CS>::new(spi_bus, cs);
         lcd.set_rotation(Rotation::Deg270);
         let niceview = NiceView::new(lcd);
@@ -134,36 +142,37 @@ impl<SPI: SpiBus<u8>, CS: OutputPin> NiceView<SPI, CS> {
         controller
     }
 
-}
-
-impl<SPI: SpiBus<u8>, CS: OutputPin> OriginDimensions for NiceView<SPI, CS> {
-    fn size(&self) -> Size {
-        self.lcd.size()
-    }
-}
-
-impl<SPI: SpiBus<u8>, CS: OutputPin> DrawTarget for NiceView<SPI, CS> {
-    type Color = BinaryColor;
-    type Error = core::convert::Infallible;
-
-    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
-    where
-        I: IntoIterator<Item = Pixel<Self::Color>>,
-    {
-        self.lcd.draw_iter(pixels)
-    }
-    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
-        self.lcd.clear(color)
-    }
-}
-
-impl<SPI: SpiBus<u8>, CS: OutputPin> DisplayProvider for NiceView<SPI, CS> {
-    type Color = BinaryColor;
-
-    fn style(&self) -> Style<Self::Color> {
+    fn style() -> Style<BinaryColor> {
         DISPLAY_STYLE
     }
-    fn update(&mut self) {
+}
+
+impl<SPI, CS, Animation> DisplayDriver for NiceView<SPI, CS, Animation>
+where
+    SPI: SpiBus<u8>,
+    CS: OutputPin,
+    Animation: AnimationWidget<BinaryColor>,
+{
+    fn draw<Info: InfoProvider>(&mut self, info: &Info) {
+        use kolibri_embedded_gui::label::Label;
+        use kolibri_embedded_gui::ui::Ui;
+        let style = Self::style();
+        let mut ui = Ui::new_fullscreen(&mut *self.lcd, style);
+        ui.clear_background().unwrap();
+
+        ui.add(Label::new("RMK!"));
+
+        let mut buffer = itoa::Buffer::new();
+        let wpm_str = buffer.format(info.wpm());
+        ui.add_horizontal(Label::new("wpm:"));
+        ui.add_horizontal(Label::new(wpm_str));
+        if info.wpm() != 0 {
+            ui.add_horizontal(Animation::new().set(self.increment));
+            self.increment = self.increment.wrapping_add(1);
+        } else {
+            ui.add_horizontal(Animation::new().set(0));
+            self.increment = 0;
+        }
         self.lcd.update().unwrap();
     }
 }

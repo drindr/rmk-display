@@ -1,7 +1,7 @@
 use rmk::event::ControllerEvent;
 use rmk::keycode::ModifierCombination;
 
-pub(crate) struct DispInfo<const PERIPHERAL_COUNT: usize> {
+pub(crate) struct Infomation<const PERIPHERAL_COUNT: usize> {
     /// Battery level
     pub battery: u8,
     /// Charging state changed
@@ -16,11 +16,9 @@ pub(crate) struct DispInfo<const PERIPHERAL_COUNT: usize> {
     pub connection_type: u8,
     /// Split peripheral connection
     pub peripheral: [bool; PERIPHERAL_COUNT],
-    /// temporary bongo up and down
-    pub up: bool,
 }
 
-impl<const PERIPHERAL_COUNT: usize> Default for DispInfo<PERIPHERAL_COUNT> {
+impl<const PERIPHERAL_COUNT: usize> Default for Infomation<PERIPHERAL_COUNT> {
     fn default() -> Self {
         Self {
             battery: 0,
@@ -30,11 +28,10 @@ impl<const PERIPHERAL_COUNT: usize> Default for DispInfo<PERIPHERAL_COUNT> {
             wpm: 0,
             connection_type: 0,
             peripheral: [false; PERIPHERAL_COUNT],
-            up: false,
         }
     }
 }
-impl<const PERIPHERAL_COUNT: usize> DispInfo<PERIPHERAL_COUNT> {
+impl<const PERIPHERAL_COUNT: usize> Infomation<PERIPHERAL_COUNT> {
     pub fn update_info(&mut self, event: &ControllerEvent) {
         match event {
             ControllerEvent::Battery(battery) => {
@@ -61,6 +58,49 @@ impl<const PERIPHERAL_COUNT: usize> DispInfo<PERIPHERAL_COUNT> {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+/// for type erasing, reduce the noise of PERIPHERAL_COUNT
+pub trait InfoProvider {
+    fn update(&mut self, event: &ControllerEvent);
+    fn battery(&self) -> u8;
+    fn charging(&self) -> bool;
+    fn layer(&self) -> u8;
+    fn modifier(&self) -> ModifierCombination;
+    fn wpm(&self) -> u16;
+    fn connection_type(&self) -> u8;
+    fn peripheral(&self, index: usize) -> Option<bool>;
+}
+
+impl<const PERIPHERAL_COUNT: usize> InfoProvider for Infomation<PERIPHERAL_COUNT> {
+    fn update(&mut self, event: &ControllerEvent) {
+        self.update_info(event);
+    }
+    fn battery(&self) -> u8 {
+        self.battery
+    }
+    fn charging(&self) -> bool {
+        self.charging
+    }
+    fn layer(&self) -> u8 {
+        self.layer
+    }
+    fn modifier(&self) -> ModifierCombination {
+        self.modifier
+    }
+    fn wpm(&self) -> u16 {
+        self.wpm
+    }
+    fn connection_type(&self) -> u8 {
+        self.connection_type
+    }
+    fn peripheral(&self, index: usize) -> Option<bool> {
+        if index < PERIPHERAL_COUNT {
+            Some(self.peripheral[index])
+        } else {
+            None
         }
     }
 }
