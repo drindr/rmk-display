@@ -17,7 +17,7 @@ pub(crate) struct DispInfo<const PERIPHERAL_COUNT: usize> {
     /// Split peripheral connection
     pub peripheral: [bool; PERIPHERAL_COUNT],
     /// temporary bongo up and down
-    pub up: bool
+    pub up: bool,
 }
 
 impl<const PERIPHERAL_COUNT: usize> Default for DispInfo<PERIPHERAL_COUNT> {
@@ -30,7 +30,7 @@ impl<const PERIPHERAL_COUNT: usize> Default for DispInfo<PERIPHERAL_COUNT> {
             wpm: 0,
             connection_type: 0,
             peripheral: [false; PERIPHERAL_COUNT],
-            up: false
+            up: false,
         }
     }
 }

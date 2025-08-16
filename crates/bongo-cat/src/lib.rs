@@ -148,7 +148,7 @@ fn read_binary(width: u32, height: u32, transform: Transform, left: bool, right:
             }
         }
         // row padding
-        if bit_index != 7 && y != height - 1{
+        if bit_index != 7 && y != height - 1 {
             bit_index = 7;
             bit_byte = bit_iter.next().unwrap();
         }

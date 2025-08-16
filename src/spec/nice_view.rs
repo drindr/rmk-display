@@ -1,8 +1,9 @@
 use crate::{DisplayController, DisplayProvider};
+use crate::AnimationWidget;
 use embedded_hal::{digital::OutputPin, spi::SpiBus};
 use memory_lcd_spi::{
     DisplaySpec, MemoryLCD,
-    framebuffer::{FramebufferBW, Sharp, Rotation},
+    framebuffer::{FramebufferBW, Rotation, Sharp},
 };
 
 use embedded_graphics::Pixel;
@@ -37,16 +38,18 @@ pub(crate) const DISPLAY_STYLE: Style<BinaryColor> = Style {
     item_background_color: BinaryColor::Off,
 };
 
+pub type BongoCatAnimation<'a> = bongo_cat_impl::BongoCat<'a>;
+
 #[bongo_cat::bongo_cat(binary, width = 60, height = 60, both)]
 mod bongo_cat_impl {
+    use crate::AnimationWidget;
+    use embedded_graphics::draw_target::DrawTarget;
+    use embedded_graphics::geometry::{Point, Size};
+    use embedded_graphics::image::{Image, ImageRaw};
+    use embedded_graphics::pixelcolor::BinaryColor;
+    use embedded_graphics::transform::Transform;
     use kolibri_embedded_gui::smartstate::{Container, Smartstate};
     use kolibri_embedded_gui::ui::{GuiResult, Response, Ui, Widget};
-    use embedded_graphics::pixelcolor::BinaryColor;
-    use embedded_graphics::draw_target::DrawTarget;
-    use embedded_graphics::geometry::{Size, Point};
-    use embedded_graphics::image::{Image, ImageRaw};
-    use embedded_graphics::transform::Transform;
-    use crate::AnimationWidget;
     pub struct BongoCat<'a> {
         up: u8,
         smartstate: Container<'a, Smartstate>,
@@ -63,7 +66,9 @@ mod bongo_cat_impl {
             ui: &mut Ui<DRAW, BinaryColor>,
         ) -> GuiResult<Response> {
             let iresponse = ui.allocate_space(Size::new(WIDTH, HEIGHT))?;
-            let redraw = !self.smartstate.eq_option(&Some(Smartstate::state(self.up.into())));
+            let redraw = !self
+                .smartstate
+                .eq_option(&Some(Smartstate::state(self.up.into())));
             self.smartstate
                 .modify(|st| *st = Smartstate::state(self.up.into()));
             if redraw {
@@ -104,10 +109,15 @@ impl DisplaySpec for NiceView {
     type Framebuffer = FramebufferBW<{ Self::WIDTH }, { Self::HEIGHT }, { Self::SIZE }, Sharp>;
 }
 
-pub fn create_controller<'a, SPI: SpiBus<u8>, CS: OutputPin, const PERIPHERAL_COUNT: usize>(
+pub fn new_controller<SPI, CS, Animation, const PERIPHERAL_COUNT: usize>(
     spi_bus: SPI,
     cs: CS,
-) -> DisplayController<'a, BinaryColor, Wrapper<SPI, CS>, PERIPHERAL_COUNT> {
+) -> DisplayController<BinaryColor, Wrapper<SPI, CS>, Animation, PERIPHERAL_COUNT>
+where
+    SPI: SpiBus<u8>,
+    CS: OutputPin,
+    Animation: AnimationWidget<BinaryColor>,
+{
     let mut lcd = MemoryLCD::<NiceView, SPI, CS>::new(spi_bus, cs);
     lcd.set_rotation(Rotation::Deg270);
     let wrapper = Wrapper { lcd };
@@ -140,9 +150,8 @@ impl<SPI: SpiBus<u8>, CS: OutputPin> DrawTarget for Wrapper<SPI, CS> {
     }
 }
 
-impl<'a, SPI: SpiBus<u8>, CS: OutputPin> DisplayProvider<'a> for Wrapper<SPI, CS> {
+impl<SPI: SpiBus<u8>, CS: OutputPin> DisplayProvider for Wrapper<SPI, CS> {
     type Color = BinaryColor;
-    type Animation = bongo_cat_impl::BongoCat<'a>;
 
     fn style(&self) -> Style<Self::Color> {
         DISPLAY_STYLE

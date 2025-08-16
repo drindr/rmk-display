@@ -19,41 +19,42 @@ pub trait AnimationWidget<Color: PixelColor>: Widget<Color> {
     fn set(self, value: u8) -> Self;
 }
 
-pub trait DisplayProvider<'a> {
+pub trait DisplayProvider {
     type Color: PixelColor;
-    type Animation: AnimationWidget<Self::Color> + 'a;
     fn style(&self) -> Style<Self::Color>;
     fn update(&mut self);
 }
 
-pub trait DisplayDriver<'a, Color: PixelColor>:
-    DisplayProvider<'a, Color = Color> + DrawTarget<Color = Color>
+pub trait DisplayDriver<Color: PixelColor>:
+    DisplayProvider<Color = Color> + DrawTarget<Color = Color>
 {
 }
 
-impl<'a, T, Color> DisplayDriver<'a, Color> for T
+impl<'a, T, Color> DisplayDriver<Color> for T
 where
-    T: DisplayProvider<'a, Color = Color> + DrawTarget<Color = Color>,
+    T: DisplayProvider<Color = Color> + DrawTarget<Color = Color>,
     Color: PixelColor,
 {
 }
 
-pub struct DisplayController<'a, Color, DisplayImpl, const PERIPHERAL_COUNT: usize>
+pub struct DisplayController<Color, DisplayImpl, Animation, const PERIPHERAL_COUNT: usize>
 where
     Color: PixelColor,
-    DisplayImpl: DisplayDriver<'a, Color>,
+    DisplayImpl: DisplayDriver<Color>,
+    Animation: AnimationWidget<Color>,
 {
     sub: ControllerSub,
     disp: DisplayImpl,
     info: DispInfo<PERIPHERAL_COUNT>,
     last_update: Instant,
-    _phantom: core::marker::PhantomData<&'a Color>,
+    _phantom: core::marker::PhantomData<(Color, Animation)>,
 }
-impl<'a, Color, DisplayImpl, const PERIPHERAL_COUNT: usize>
-    DisplayController<'a, Color, DisplayImpl, PERIPHERAL_COUNT>
+impl<Color, DisplayImpl, Animation, const PERIPHERAL_COUNT: usize>
+    DisplayController<Color, DisplayImpl, Animation, PERIPHERAL_COUNT>
 where
     Color: PixelColor,
-    DisplayImpl: DisplayDriver<'a, Color>,
+    DisplayImpl: DisplayDriver<Color>,
+    Animation: AnimationWidget<Color>,
 {
     pub fn new(disp: DisplayImpl) -> Self {
         Self {
@@ -66,11 +67,12 @@ where
     }
 }
 
-impl<'a, Color, DisplayImpl, const PERIPHERAL_COUNT: usize> Controller
-    for DisplayController<'a, Color, DisplayImpl, PERIPHERAL_COUNT>
+impl<Color, DisplayImpl, Animation, const PERIPHERAL_COUNT: usize> Controller
+    for DisplayController<Color, DisplayImpl, Animation, PERIPHERAL_COUNT>
 where
     Color: PixelColor,
-    DisplayImpl: DisplayDriver<'a, Color>,
+    DisplayImpl: DisplayDriver<Color>,
+    Animation: AnimationWidget<Color>,
 {
     type Event = ControllerEvent;
     async fn process_event(&mut self, event: Self::Event) {
@@ -85,11 +87,12 @@ where
     }
 }
 
-impl<'a, Color, DisplayImpl, const PERIPHERAL_COUNT: usize>
-    DisplayController<'a, Color, DisplayImpl, PERIPHERAL_COUNT>
+impl<Color, DisplayImpl, Animation, const PERIPHERAL_COUNT: usize>
+    DisplayController<Color, DisplayImpl, Animation, PERIPHERAL_COUNT>
 where
     Color: PixelColor,
-    DisplayImpl: DisplayDriver<'a, Color>,
+    DisplayImpl: DisplayDriver<Color>,
+    Animation: AnimationWidget<Color>,
 {
     fn draw(&mut self) {
         use kolibri_embedded_gui::label::Label;
@@ -105,10 +108,10 @@ where
         ui.add_horizontal(Label::new("wpm:"));
         ui.add_horizontal(Label::new(wpm_str));
         if self.info.wpm != 0 {
-            ui.add_horizontal(DisplayImpl::Animation::new().set(self.info.up as u8));
+            ui.add_horizontal(Animation::new().set(self.info.up as u8));
             self.info.up = !self.info.up;
         } else {
-            ui.add_horizontal(DisplayImpl::Animation::new().set(0));
+            ui.add_horizontal(Animation::new().set(0));
         }
 
         self.disp.update();
