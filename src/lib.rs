@@ -32,8 +32,7 @@ where
     info: Infomation<PERIPHERAL_COUNT>,
     last_update: Instant,
 }
-impl<DisplayImpl, const PERIPHERAL_COUNT: usize>
-    DisplayController<DisplayImpl, PERIPHERAL_COUNT>
+impl<DisplayImpl, const PERIPHERAL_COUNT: usize> DisplayController<DisplayImpl, PERIPHERAL_COUNT>
 where
     DisplayImpl: DisplayDriver,
 {

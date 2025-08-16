@@ -7,13 +7,9 @@ use memory_lcd_spi::{
     framebuffer::{FramebufferBW, Rotation, Sharp},
 };
 
-use embedded_graphics::Pixel;
+use embedded_graphics::geometry::Size;
 use embedded_graphics::mono_font;
 use embedded_graphics::pixelcolor::BinaryColor;
-use embedded_graphics::{
-    draw_target::DrawTarget,
-    geometry::{OriginDimensions, Size},
-};
 use kolibri_embedded_gui::style::Spacing;
 use kolibri_embedded_gui::style::Style;
 
@@ -128,7 +124,11 @@ where
     Animation: AnimationWidget<BinaryColor>,
 {
     pub fn new(lcd: MemoryLCD<NiceViewDisplaySpec, SPI, CS>) -> Self {
-        Self { lcd, increment: 0, _phantom: core::marker::PhantomData }
+        Self {
+            lcd,
+            increment: 0,
+            _phantom: core::marker::PhantomData,
+        }
     }
 
     pub fn new_controller<const PERIPHERAL_COUNT: usize>(
